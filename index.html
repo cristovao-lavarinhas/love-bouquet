@@ -18,6 +18,11 @@
   }
   canvas { display: block; position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; touch-action: manipulation; }
   #fw { pointer-events: none; }
+  #c { touch-action: none; cursor: grab; }
+  #c.dragging { cursor: grabbing; }
+  #tip { position: fixed; left: 0; right: 0; top: max(18px, env(safe-area-inset-top)); text-align: center;
+         font: 13px system-ui, sans-serif; color: #ffd6e2a0; opacity: 0; transition: opacity 1.2s; pointer-events: none; }
+  #tip.show { opacity: 1; }
 
 
   #intro {
@@ -63,6 +68,8 @@
 </div>
 
 <audio id="music" src="music.mp3" preload="auto" loop playsinline></audio>
+
+<div id="tip">toca no ecrã ou arrasta o ramo</div>
 
 <button id="mute" aria-label="Desligar som">
   <svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path id="waves" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>
@@ -367,7 +374,11 @@
     const dt = Math.min(0.05, (now - (lastFw || now)) / 1000); lastFw = now;
     fctx.clearRect(0, 0, W, H);
     if (!revealed) return;
-    if (now > nextLaunch) { launch(); nextLaunch = now + 1700 + Math.random() * 1800; }
+    if (now > nextLaunch) {
+      launch();
+      if (Math.random() < 0.3) setTimeout(launch, 250 + Math.random() * 350);
+      nextLaunch = now + 900 + Math.random() * 1100;
+    }
     const fs = Math.max(9, ch * 0.95);
     fctx.font = `700 ${fs}px ${FONT}`;
     fctx.globalCompositeOperation = "lighter";
@@ -486,6 +497,97 @@
     ctx.font = `700 ${ch * 0.98}px ${FONT}`;
   }
 
+
+  // ---------- Interação: tocar = fogo de artifício + pétalas; arrastar = rodar ----------
+  const PETAL_COLORS = ["#ff4d7d", "#ff9ec0", "#ffc2d4", "#ff2e55", "#fff1f4"];
+  const tapFx = [];             // partículas desenhadas à frente do ramo
+  let userAngle = 0, spin = 0, lastFxT = 0;
+
+  function tapBurst(x, y) {
+    const color = FW_COLORS[(Math.random() * FW_COLORS.length) | 0];
+    const n = 40, sp = Math.min(W, H) * (W < 600 ? 0.22 : 0.16);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + Math.random() * 0.2;
+      const v = sp * (0.6 + Math.random() * 0.5);
+      tapFx.push({ kind: 0, x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0, max: 1.1 + Math.random() * 0.5,
+                   color: Math.random() < 0.7 ? color : "#fff1f4" });
+    }
+    for (let i = 0; i < 14; i++) {                         // pétalas que caem a balançar
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4;
+      const v = Math.min(W, H) * (0.08 + Math.random() * 0.1);
+      tapFx.push({ kind: 1, x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0, max: 2.6 + Math.random() * 1.2,
+                   color: PETAL_COLORS[(Math.random() * PETAL_COLORS.length) | 0], ph: Math.random() * 6.28,
+                   chr: "@%o*"[(Math.random() * 4) | 0] });
+    }
+    if (tapFx.length > 900) tapFx.splice(0, tapFx.length - 900);
+  }
+
+  function drawTapFx(now) {
+    const dt = Math.min(0.05, (now - (lastFxT || now)) / 1000); lastFxT = now;
+    // inércia da rotação
+    if (!dragging) { userAngle += spin * dt; spin *= Math.pow(0.08, dt); }
+    if (!tapFx.length) return;
+    ctx.font = `700 ${Math.max(9, ch * 1.05)}px ${FONT}`;
+    for (let i = tapFx.length - 1; i >= 0; i--) {
+      const p = tapFx[i];
+      p.life += dt;
+      const k = p.life / p.max;
+      if (k >= 1) { tapFx.splice(i, 1); continue; }
+      if (p.kind === 0) {
+        const drag = Math.pow(0.15, dt);
+        p.vx *= drag; p.vy = p.vy * drag + H * 0.05 * dt;
+        ctx.globalAlpha = (1 - k) * (1 - k) * (0.75 + 0.25 * Math.sin(p.life * 30 + i));
+        ctx.fillStyle = p.color;
+        ctx.fillText(k < 0.35 ? "*" : k < 0.7 ? "+" : ".", p.x, p.y);
+      } else {
+        const drag = Math.pow(0.35, dt);
+        p.vx = p.vx * drag + Math.sin(p.life * 3 + p.ph) * W * 0.02 * dt;
+        p.vy = p.vy * drag + H * 0.06 * dt;
+        ctx.globalAlpha = Math.min(1, (1 - k) * 1.6);
+        ctx.fillStyle = p.color;
+        ctx.fillText(p.chr, p.x, p.y);
+      }
+      p.x += p.vx * dt; p.y += p.vy * dt;
+    }
+    ctx.globalAlpha = 1;
+    ctx.font = `700 ${ch * 0.98}px ${FONT}`;
+  }
+
+  // Ponteiro: distinguir toque de arrasto
+  let dragging = false, down = null, lastX = 0, lastMoveT = 0;
+  canvas.addEventListener("pointerdown", e => {
+    if (!playing) return;
+    down = { x: e.clientX, y: e.clientY, t: performance.now() };
+    lastX = e.clientX; lastMoveT = down.t; spin = 0;
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  canvas.addEventListener("pointermove", e => {
+    if (!down) return;
+    if (!dragging && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) {
+      dragging = true; canvas.classList.add("dragging");
+    }
+    if (dragging) {
+      const now = performance.now(), dx = e.clientX - lastX;
+      const d = (dx / Math.max(240, W * 0.5)) * Math.PI;   // meio ecrã ≈ meia volta
+      userAngle += d;
+      spin = d / Math.max(0.008, (now - lastMoveT) / 1000);
+      lastX = e.clientX; lastMoveT = now;
+    }
+  });
+  const endPointer = e => {
+    if (!down) return;
+    if (!dragging) tapBurst(e.clientX, e.clientY);
+    else if (performance.now() - lastMoveT > 80) spin = 0; // parou antes de largar
+    spin = Math.max(-6, Math.min(6, spin));
+    dragging = false; down = null; canvas.classList.remove("dragging");
+    tip.classList.remove("show");
+  };
+  canvas.addEventListener("pointerup", endPointer);
+  canvas.addEventListener("pointercancel", () => { dragging = false; down = null; spin = 0; canvas.classList.remove("dragging"); });
+
+  // dica discreta, uma vez
+  const tip = document.getElementById("tip");
+
   let startT = 0, playing = false;
   if (document.fonts && document.fonts.load) {
     document.fonts.load('40px "Pacifico"').then(() => { if (playing) resize(); }).catch(() => {});
@@ -493,7 +595,7 @@
 
   function frame(now) {
     const t = (now - startT) / 1000;
-    const angle = t * (Math.PI * 2 / 14) + 0.35;   // uma volta a cada ~14 s
+    const angle = t * (Math.PI * 2 / 14) + 0.35 + userAngle;   // uma volta a cada ~14 s + o que ela rodar
     const tilt = -0.22;
     const ca = Math.cos(angle), sa = Math.sin(angle), ct = Math.cos(tilt), st = Math.sin(tilt);
     const n = cols * rows;
@@ -551,6 +653,7 @@
     }
 
     drawTitle(t);
+    drawTapFx(now);
     drawFireworks(now, t > 2.2);
     requestAnimationFrame(frame);
   }
@@ -592,6 +695,8 @@
   intro.addEventListener("click", () => {
     if (playing) return;
     playing = true;
+    setTimeout(() => tip.classList.add("show"), 6500);
+    setTimeout(() => tip.classList.remove("show"), 12500);
     startMusic();
     intro.classList.add("hide");
     muteBtn.classList.add("show");
