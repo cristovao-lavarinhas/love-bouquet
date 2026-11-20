@@ -59,6 +59,8 @@
   </div>
 </div>
 
+<audio id="music" src="music.mp3" preload="auto" loop playsinline></audio>
+
 <button id="mute" aria-label="Desligar som">
   <svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path id="waves" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>
 </button>
@@ -458,40 +460,35 @@
     requestAnimationFrame(frame);
   }
 
-  // ---------- Música em loop (sem falhas) ----------
+  // ---------- Música ("Coming Up Roses", a partir dos 0:22, em loop) ----------
   const muteBtn = document.getElementById("mute");
   const waves = document.getElementById("waves");
-  let actx = null, gain = null, fallback = null, muted = false;
-  const LOOP_LEN = 9.3;
+  const music = document.getElementById("music");
+  let muted = false;
 
-  async function startMusic() {
+  function startMusic() {
+    // play() tem de ser chamado diretamente no toque (iPhone)
     try {
-      if (navigator.audioSession) navigator.audioSession.type = "playback"; // iPhone em modo silêncio
-      const AC = window.AudioContext || window.webkitAudioContext;
-      actx = new AC();
-      await actx.resume();
-      gain = actx.createGain();
-      gain.gain.setValueAtTime(0, actx.currentTime);
-      gain.gain.linearRampToValueAtTime(1, actx.currentTime + 0.6);
-      gain.connect(actx.destination);
-      const buf = await fetch("music.mp3").then(r => r.arrayBuffer()).then(a => new Promise((ok, err) => actx.decodeAudioData(a, ok, err)));
-      const src = actx.createBufferSource();
-      src.buffer = buf; src.loop = true;
-      src.loopStart = 0; src.loopEnd = Math.min(LOOP_LEN, buf.duration);
-      src.connect(gain); src.start();
-    } catch (_) {
-      // plano B: elemento <audio> normal
-      fallback = new Audio("music.mp3");
-      fallback.loop = true;
-      fallback.play().catch(() => {});
-    }
+      if (navigator.audioSession) navigator.audioSession.type = "playback";
+      music.currentTime = 0;
+      music.volume = 0;
+      const p = music.play();
+      if (p && p.catch) p.catch(() => {});
+      // entrada suave (no iPhone o volume é fixo; o ficheiro já tem fade-in)
+      const t0 = performance.now();
+      const fade = () => {
+        const k = Math.min(1, (performance.now() - t0) / 800);
+        try { music.volume = k; } catch (_) {}
+        if (k < 1) requestAnimationFrame(fade);
+      };
+      requestAnimationFrame(fade);
+    } catch (_) { /* sem som, a animação continua */ }
   }
 
   muteBtn.addEventListener("click", e => {
     e.stopPropagation();
     muted = !muted;
-    if (gain) gain.gain.setTargetAtTime(muted ? 0 : 1, actx.currentTime, 0.05);
-    if (fallback) fallback.muted = muted;
+    music.muted = muted;
     waves.style.display = muted ? "none" : "";
     muteBtn.setAttribute("aria-label", muted ? "Ligar som" : "Desligar som");
   });
