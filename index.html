@@ -4,18 +4,21 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Um ramo para ti</title>
-<meta name="theme-color" content="#2b3550">
+<meta name="theme-color" content="#12040c">
 <meta name="description" content="Um ramo de flores em código.">
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #2b3550; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #070207; }
   body {
     background:
-      radial-gradient(120% 90% at 50% 45%, #5a6a8e 0%, #46557a 45%, #2b3550 100%);
+      radial-gradient(50% 36% at 50% 33%, rgba(255, 60, 120, .16) 0%, rgba(255, 60, 120, 0) 72%),
+      radial-gradient(120% 95% at 50% 40%, #2e0a1f 0%, #16050f 50%, #070207 100%);
   }
-  canvas { display: block; width: 100vw; height: 100vh; height: 100dvh; touch-action: manipulation; }
+  canvas { display: block; position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; touch-action: manipulation; }
+  #fw { pointer-events: none; }
+
 
   #intro {
-    position: fixed; inset: 0; display: grid; place-items: center; background: #1d2438;
+    position: fixed; inset: 0; display: grid; place-items: center; background: #12040c;
     font-family: Menlo, Consolas, "SF Mono", "DejaVu Sans Mono", monospace; cursor: pointer;
     transition: opacity .8s; -webkit-tap-highlight-color: transparent;
   }
@@ -39,6 +42,7 @@
 </style>
 </head>
 <body>
+<canvas id="fw"></canvas>
 <canvas id="c"></canvas>
 
 <div id="intro" role="button" aria-label="Abrir">
@@ -65,22 +69,22 @@
 
   // ---------- Paleta (como no bouquet3d.py) ----------
   const C = {
-    PINK:   [255, 105, 180], RED:    [255,  58,  52], PURPLE: [160, 110, 255],
-    YELLOW: [255, 222,  60], ORANGE: [255, 140,  40], WHITE:  [240, 240, 245],
-    GOLD_CENTER: [235, 185, 40], DARK_CENTER: [125, 75, 25],
-    LEAF: [90, 225, 85], STEM: [70, 190, 75],
-    PAPER: [228, 232, 240], RIBBON: [255, 120, 185], SPARK: [255, 255, 255],
+    PINK:   [255, 110, 170], RED:    [255,  40,  70], ROSE:   [235,  30, 110],
+    BLUSH:  [255, 185, 205], CORAL:  [255, 120, 110], WHITE:  [255, 244, 246],
+    GOLD_CENTER: [255, 200, 90], DARK_CENTER: [140, 30, 50],
+    LEAF: [80, 210, 120], STEM: [60, 170, 100],
+    PAPER: [250, 225, 232], RIBBON: [255, 50, 95], SPARK: [255, 225, 235],
   };
   // (cor, centro, nº de pétalas)
   const DAISIES = [
     [C.WHITE,  C.GOLD_CENTER, 14], // margarida
     [C.PINK,   C.GOLD_CENTER, 8],  // cosmos rosa
-    [C.RED,    C.DARK_CENTER, 6],  // vermelha
-    [C.PURPLE, C.GOLD_CENTER, 7],  // roxa
-    [C.YELLOW, C.DARK_CENTER, 12], // tipo girassol
-    [C.ORANGE, C.DARK_CENTER, 9],  // laranja
+    [C.RED,    C.DARK_CENTER, 7],  // vermelha
+    [C.BLUSH,  C.GOLD_CENTER, 10], // rosa-claro
+    [C.ROSE,   C.DARK_CENTER, 9],  // rosa forte
+    [C.CORAL,  C.GOLD_CENTER, 8],  // coral
   ];
-  const TULIP_COLORS = [C.RED, C.PINK, C.YELLOW];
+  const TULIP_COLORS = [C.RED, C.PINK, C.ROSE];
 
   // Rampas de caracteres por material (escuro -> claro)
   const RAMP = {
@@ -249,7 +253,7 @@
       const size = 0.16 + rnd() * 0.06;
       if (i % 4 === 2) tulip(h.pos, h.axis, size * 0.8, TULIP_COLORS[(i >> 2) % TULIP_COLORS.length]);
       else { const [col, cen, n] = DAISIES[i % DAISIES.length]; daisy(h.pos, h.axis, size, col, cen, n); }
-      stem(add(h.pos, h.axis, -size * 0.3), [h.pos[0] * 0.35, 0.02, h.pos[2] * 0.35], 0.012);
+      { const a0 = add(h.pos, h.axis, -size * 0.3); stem(a0, add(a0, [-a0[0], 0.02 - a0[1], -a0[2]], 0.3), 0.012); }
     });
     // folhas: uma coroa a sair do embrulho e algumas entre as flores
     const NL = 12;
@@ -309,8 +313,84 @@
     mat = new Int8Array(n);
     reveal = new Float32Array(n);
     for (let i = 0; i < n; i++) reveal[i] = Math.random();
+    if (typeof fwResize === "function") fwResize();
     ctx.font = `700 ${ch * 0.98}px ${FONT}`;
     ctx.textBaseline = "top";
+  }
+
+
+  // ---------- Fogo de artifício (discreto, atrás do ramo) ----------
+  const fwc = document.getElementById("fw");
+  const fctx = fwc.getContext("2d");
+  const FW_COLORS = ["#ff4d7d", "#ff9ec0", "#ffd27a", "#fff1f4", "#ff2e55"];
+  const rockets = [], sparksFw = [];
+  let nextLaunch = 0, lastFw = 0;
+
+  function fwResize() {
+    fwc.width = Math.round(W * dpr); fwc.height = Math.round(H * dpr);
+    fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fctx.textAlign = "center"; fctx.textBaseline = "middle";
+  }
+
+  function launch() {
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const x = W / 2 + side * Math.min(W, H) * (0.18 + Math.random() * 0.32);
+    rockets.push({
+      x, y: H * 0.92, tx: x + (Math.random() - 0.5) * W * 0.06,
+      ty: H * (0.12 + Math.random() * 0.2), t: 0, dur: 1.1 + Math.random() * 0.4,
+      color: FW_COLORS[(Math.random() * FW_COLORS.length) | 0],
+    });
+  }
+
+  function burst(x, y, color) {
+    const n = 46 + ((Math.random() * 18) | 0);
+    const sp = Math.min(W, H) * (0.2 + Math.random() * 0.1);
+    const alt = FW_COLORS[(Math.random() * FW_COLORS.length) | 0];
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + Math.random() * 0.15;
+      const v = sp * (0.75 + Math.random() * 0.3);
+      sparksFw.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0, max: 1.3 + Math.random() * 0.6,
+                      color: Math.random() < 0.75 ? color : alt });
+    }
+  }
+
+  function drawFireworks(now, revealed) {
+    const dt = Math.min(0.05, (now - (lastFw || now)) / 1000); lastFw = now;
+    fctx.clearRect(0, 0, W, H);
+    if (!revealed) return;
+    if (now > nextLaunch) { launch(); nextLaunch = now + 1700 + Math.random() * 1800; }
+    const fs = Math.max(9, ch * 0.95);
+    fctx.font = `700 ${fs}px ${FONT}`;
+    fctx.globalCompositeOperation = "lighter";
+
+    for (let i = rockets.length - 1; i >= 0; i--) {
+      const r = rockets[i];
+      r.t += dt / r.dur;
+      const e = 1 - (1 - Math.min(1, r.t)) ** 2;
+      const x = r.x + (r.tx - r.x) * e, y = r.y + (r.ty - r.y) * e;
+      fctx.globalAlpha = 0.85; fctx.fillStyle = r.color;
+      for (let k = 0; k < 4; k++) {                 // rasto
+        fctx.globalAlpha = 0.7 - k * 0.17;
+        fctx.fillText(k === 0 ? "*" : ".", x, y + k * fs * 0.7);
+      }
+      if (r.t >= 1) { burst(x, y, r.color); rockets.splice(i, 1); }
+    }
+
+    for (let i = sparksFw.length - 1; i >= 0; i--) {
+      const p = sparksFw[i];
+      p.life += dt;
+      const k = p.life / p.max;
+      if (k >= 1) { sparksFw.splice(i, 1); continue; }
+      const drag = Math.pow(0.18, dt);
+      p.vx *= drag; p.vy = p.vy * drag + H * 0.06 * dt;   // abranda e cai devagar
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      const twinkle = 0.75 + 0.25 * Math.sin(p.life * 30 + i);
+      fctx.globalAlpha = (1 - k) * (1 - k) * twinkle;
+      fctx.fillStyle = p.color;
+      fctx.fillText(k < 0.35 ? "*" : k < 0.7 ? "+" : ".", p.x, p.y);
+    }
+    fctx.globalAlpha = 1;
+    fctx.globalCompositeOperation = "source-over";
   }
 
   let startT = 0, playing = false;
@@ -352,14 +432,14 @@
       const l = lum[k];
       const ch_ = ramp[Math.min(ramp.length - 1, (l * ramp.length) | 0)];
       if (ch_ === " ") continue;
-      const b = 0.5 + 0.5 * l;
+      const b = 0.62 + 0.38 * l;
       const style = `rgb(${(colR[k] * b) | 0},${(colG[k] * b) | 0},${(colB[k] * b) | 0})`;
       if (style !== lastStyle) { ctx.fillStyle = style; lastStyle = style; }
       ctx.fillText(ch_, (k % cols) * cw, ((k / cols) | 0) * ch);
     }
 
     // brilhos a cintilar
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = "#ffe1ea";
     for (const s of sparks) {
       const v = Math.sin(t * s.sp + s.ph);
       if (v < 0.55 || Math.random() > rev) continue;
@@ -374,6 +454,7 @@
       ctx.fillText(v > 0.85 ? "*" : v > 0.7 ? "+" : ".", c * cw, r * ch);
     }
 
+    drawFireworks(now, t > 2.2);
     requestAnimationFrame(frame);
   }
 
