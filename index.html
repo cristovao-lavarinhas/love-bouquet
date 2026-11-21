@@ -3,26 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Para a Carolina</title>
+<title>Abre-me</title>
 <meta name="theme-color" content="#12040c">
-<meta name="description" content="Um ramo de flores feito em código, só para ti. Abre com o som ligado.">
-<!-- Pré-visualização (WhatsApp, Instagram, iMessage…) -->
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="Para a Carolina">
-<meta property="og:title" content="Para a Carolina 🌹">
-<meta property="og:description" content="Um ramo de flores feito em código, só para ti. Abre com o som ligado.">
-<meta property="og:url" content="https://cristovao-lavarinhas.github.io/love-bouquet/">
-<meta property="og:image" content="https://cristovao-lavarinhas.github.io/love-bouquet/og.jpg">
-<meta property="og:image:secure_url" content="https://cristovao-lavarinhas.github.io/love-bouquet/og.jpg">
-<meta property="og:image:type" content="image/jpeg">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Um ramo de flores em ASCII com o texto Para a Carolina">
-<meta property="og:locale" content="pt_PT">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Para a Carolina 🌹">
-<meta name="twitter:description" content="Um ramo de flores feito em código, só para ti.">
-<meta name="twitter:image" content="https://cristovao-lavarinhas.github.io/love-bouquet/og.jpg">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌹</text></svg>">
 <link rel="preload" href="pacifico.woff2" as="font" type="font/woff2" crossorigin>
 <style>
@@ -713,6 +695,7 @@
   intro.addEventListener("click", () => {
     if (playing) return;
     playing = true;
+    document.title = "Para a Carolina";
     setTimeout(() => tip.classList.add("show"), 6500);
     setTimeout(() => tip.classList.remove("show"), 12500);
     startMusic();
